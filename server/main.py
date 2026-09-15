@@ -84,6 +84,7 @@ def _normalize_tip(tip: Any) -> Optional[dict]:
 
     Engine probs shape: {ML: {home, away}, spread: {home_cover, away_cover},
     total: {over, under}} → API shape: {ml, spread, totals}.
+    Also maps fair_odds → fair, edge/edge_market → edge (football parity).
     """
     if not isinstance(tip, dict):
         return None
@@ -91,6 +92,18 @@ def _normalize_tip(tip: Any) -> Optional[dict]:
     ml = probs.get("ML") or {}
     spread = probs.get("spread") or {}
     total = probs.get("total") or {}
+    fair_odds = tip.get("fair_odds") or {}
+    fair_ml = fair_odds.get("ML") or {}
+    fair_spread = fair_odds.get("spread") or {}
+    fair_total = fair_odds.get("total") or {}
+
+    def _fair_prob(fair_val: Any) -> Optional[float]:
+        try:
+            f = float(fair_val)
+            return round(1.0 / f, 4) if f > 0 else None
+        except (TypeError, ValueError):
+            return None
+
     return {
         "probs": {
             "ml": {"home": ml.get("home"), "away": ml.get("away")},
@@ -98,6 +111,16 @@ def _normalize_tip(tip: Any) -> Optional[dict]:
                        "away": spread.get("away_cover")},
             "totals": {"over": total.get("over"), "under": total.get("under")},
         },
+        "fair": {
+            "ml": {"home": _fair_prob(fair_ml.get("home")),
+                   "away": _fair_prob(fair_ml.get("away"))},
+            "spread": {"home": _fair_prob(fair_spread.get("home_cover")),
+                       "away": _fair_prob(fair_spread.get("away_cover"))},
+            "totals": {"over": _fair_prob(fair_total.get("over")),
+                       "under": _fair_prob(fair_total.get("under"))},
+        },
+        "edge": {"market": tip.get("edge_market") or tip.get("pick") or "Home",
+                 "value": tip.get("edge") if tip.get("edge") is not None else 0.0},
         "pick": tip.get("pick") or "Home",
         "verdict": tip.get("verdict") or "NO BET",
         "confidence": tip.get("confidence") or 0.0,
@@ -123,6 +146,10 @@ def _model_only_tip(home_name: str, away_name: str,
         "probs": {"ml": {"home": None, "away": None},
                   "spread": {"home": None, "away": None},
                   "totals": {"over": None, "under": None}},
+        "fair": {"ml": {"home": None, "away": None},
+                 "spread": {"home": None, "away": None},
+                 "totals": {"over": None, "under": None}},
+        "edge": {"market": "Home", "value": 0.0},
         "pick": "Home",
         "verdict": "NO BET",
         "confidence": 0.0,
@@ -203,6 +230,95 @@ def _market_from_odds(odds: dict) -> dict:
     }
 
 
+def _to_num(v: Any) -> Optional[float]:
+    """Float or None; rejects non-finite. Never raises."""
+    try:
+        f = float(v)
+        if f != f or f in (float("inf"), float("-inf")):
+            return None
+        return f
+    except (TypeError, ValueError):
+        return None
+
+
+def _to_int_or_none(v: Any) -> Optional[int]:
+    """Int or None. Never raises."""
+    try:
+        return int(v)
+    except (TypeError, ValueError):
+        return None
+
+
+def _standings_map(league: str) -> dict:
+    """Team name (lower) → standings row. {} on any failure, never raises."""
+    try:
+        if league == "EuroLeague":
+            from ingest import euroleague_free
+            rows = _cached("standings:euroleague",
+                           lambda: euroleague_free.fetch_standings())
+        else:
+            from ingest import espn_free
+            rows = _cached("standings:nba",
+                           lambda: espn_free.fetch_standings())
+    except Exception:
+        return {}
+    return {(r.get("team") or "").lower(): r for r in rows or [] if r.get("team")}
+
+
+def _team_meta(row: Optional[dict]) -> Optional[dict]:
+    """Slim league-specific team snapshot for side-by-side display.
+
+    Normalizes ESPN (avg_points_for/against) and EuroLeague
+    (points_for/against) shapes to {team, rank, wins, losses,
+    winPct (0-1), streak, pf, pa}. None when absent, never raises.
+    """
+    if not row:
+        return None
+    try:
+        pct = _to_num(row.get("win_pct"))
+        if pct is not None and pct > 1:
+            pct = pct / 100.0
+        pf = _to_num(row.get("avg_points_for") if row.get("avg_points_for") is not None
+                     else row.get("points_for"))
+        pa = _to_num(row.get("avg_points_against") if row.get("avg_points_against") is not None
+                     else row.get("points_against"))
+        streak = row.get("streak")
+        return {"team": row.get("team"),
+                "rank": _to_int_or_none(row.get("rank")),
+                "wins": _to_int_or_none(row.get("wins")),
+                "losses": _to_int_or_none(row.get("losses")),
+                "winPct": pct,
+                "streak": streak if isinstance(streak, str) else None,
+                "pf": pf, "pa": pa}
+    except Exception:
+        return None
+
+
+def _pace_for_game(home_name: str, away_name: str, home_id: str,
+                   away_id: str, espn_key: str) -> tuple:
+    """Per-team pace proxy (avg total pts / 2) from schedule form.
+
+    Returns (home_pace, away_pace); (0.0, 0.0) on any failure, never raises.
+    """
+    try:
+        from ingest import espn_free
+        hs = _cached(f"form:{home_id}",
+                     lambda: espn_free.fetch_team_schedule(home_id, espn_key))
+        as_ = _cached(f"form:{away_id}",
+                      lambda: espn_free.fetch_team_schedule(away_id, espn_key))
+        form = _team_form(hs, as_, home_name, away_name)
+    except Exception:
+        return 0.0, 0.0
+    if not form:
+        return 0.0, 0.0
+    try:
+        hp = (float(form["home_points_for"]) + float(form["home_points_against"])) / 2.0
+        ap = (float(form["away_points_for"]) + float(form["away_points_against"])) / 2.0
+        return hp, ap
+    except Exception:
+        return 0.0, 0.0
+
+
 def _engine_tip(home_name: str, away_name: str, home_id: str, away_id: str,
                 odds: dict, espn_key: str, league: str) -> Optional[dict]:
     """Compose engine.bball.build_tip with form from ingest schedules."""
@@ -248,6 +364,7 @@ def tips(league: str = "NBA") -> dict:
         raise HTTPException(400, f"unknown league: {league}")
     espn_key = ESPN_SLUGS[league]
     events = _fetch_events(league, espn_key)
+    smap = _standings_map(_display_league(league))
 
     tips_list = []
     for ev in events:
@@ -333,10 +450,21 @@ def tips(league: str = "NBA") -> dict:
                     tip["reasons"].append(f"Crowd hotter on {hot} than model (+{d:.0%})")
             sources.append({"name": "Polymarket", "url": crowd["url"]})
 
+        try:
+            home_pace, away_pace = _pace_for_game(
+                home_name, away_name, home_id, away_id, espn_key)
+        except Exception:
+            home_pace, away_pace = 0.0, 0.0
+
         tips_list.append({
             "home": home_name, "away": away_name,
             "date": match_date,
             "probs": tip["probs"],
+            "edge": tip.get("edge") or {"market": tip.get("pick") or "Home",
+                                        "value": 0.0},
+            "fair": tip.get("fair") or {"ml": {"home": None, "away": None},
+                                        "spread": {"home": None, "away": None},
+                                        "totals": {"over": None, "under": None}},
             "pick": tip["pick"], "verdict": tip["verdict"],
             "confidence": tip["confidence"],
             "reasons": tip["reasons"],
@@ -351,6 +479,10 @@ def tips(league: str = "NBA") -> dict:
             "crowd": crowd,
             "sources": sources,
             "homeForm": home_form, "awayForm": away_form,
+            "homePace": home_pace,
+            "awayPace": away_pace,
+            "teamMeta": {"home": _team_meta(smap.get(home_name.lower())),
+                         "away": _team_meta(smap.get(away_name.lower()))},
         })
 
     return {"league": league, "as_of": datetime.now(timezone.utc).isoformat(),

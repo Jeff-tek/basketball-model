@@ -540,3 +540,36 @@ body {
   border-radius: 2px;
   margin: 18px 0;
 }
+
+/* ---- Visuals: radar + crowd duel + team data (mirrors football viz-stack, court colors) ---- */
+.viz-stack { display: flex; flex-direction: column; gap: 12px; margin: 14px 0 4px; }
+.viz-duel-row { display: grid; grid-template-columns: 1fr; gap: 12px; }
+@media (min-width: 640px) { .viz-duel-row { grid-template-columns: 1fr 1fr; align-items: start; } }
+.viz-duel-row > :only-child { grid-column: 1 / -1; }
+.viz-block { background: var(--paper-2); border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px; }
+.viz-title { font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.1em; color: var(--ink-3); font-weight: 700; margin-bottom: 8px; display: flex; gap: 8px; align-items: center; }
+.radar { width: 100%; max-width: 250px; display: block; margin: 0 auto; }
+.radar-ring { fill: none; stroke: var(--line-strong); stroke-width: 1; opacity: 0.7; }
+.radar-spoke { stroke: var(--line-strong); stroke-width: 1; opacity: 0.5; }
+.radar-area { fill: var(--court); fill-opacity: 0.22; stroke: var(--court-deep); stroke-width: 2; }
+.radar-dot { fill: var(--court-deep); }
+.radar-label { font-size: 9px; fill: var(--ink-2); font-weight: 600; }
+.duel-rows { display: flex; flex-direction: column; gap: 10px; }
+.duel-row { display: grid; grid-template-columns: 18px 1fr 40px; align-items: center; gap: 8px; }
+.duel-k { font-size: 0.75rem; font-weight: 700; color: var(--ink-2); }
+.duel-track { position: relative; height: 12px; background: var(--paper-3); border-radius: 6px; }
+.duel-model { position: absolute; left: 0; top: 0; bottom: 0; border-radius: 6px; background: var(--ink-3); opacity: 0.85; }
+.duel-crowd { position: absolute; top: -3px; bottom: -3px; width: 3px; border-radius: 2px; background: var(--court); }
+.duel-d { font-size: 0.75rem; font-weight: 700; text-align: right; font-variant-numeric: tabular-nums; }
+.duel-d.hot { color: var(--bet); } .duel-d.cold { color: var(--nobet); }
+.duel-legend { display: flex; gap: 12px; margin-top: 8px; font-size: 0.7rem; color: var(--ink-3); }
+.lg-model::before { content: "▬ "; color: var(--ink-3); }
+.lg-crowd::before { content: "┃ "; color: var(--court); }
+.thin-flag { font-size: 0.65rem; background: var(--court-soft); color: var(--court-deep); padding: 2px 8px; border-radius: var(--ball-radius); letter-spacing: 0.04em; }
+
+/* ---- Team duel table ---- */
+.team-table { width: 100%; border-collapse: collapse; font-size: 0.78rem; font-variant-numeric: tabular-nums; }
+.team-table th { font-size: 0.72rem; text-align: left; color: var(--ink-2); padding: 2px 6px 6px 0; }
+.team-table th:not(:first-child), .team-table td:not(:first-child) { text-align: center; min-width: 64px; }
+.team-table td { padding: 3px 6px 3px 0; border-top: 1px solid var(--line); color: var(--ink); }
+.team-table .team-k { color: var(--ink-3); font-weight: 600; text-transform: uppercase; font-size: 0.65rem; letter-spacing: 0.06em; }

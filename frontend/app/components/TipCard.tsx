@@ -1,6 +1,9 @@
 import type { Tip } from "../lib/tips";
+import { OddsRadar, CrowdBars } from "./ModelVisuals";
+import TeamDuel from "./TeamDuel";
 
-const pct = (p: number): string => `${(p * 100).toFixed(0)}%`;
+const pct = (p: number | null | undefined): string =>
+  typeof p === "number" && Number.isFinite(p) ? `${(p * 100).toFixed(0)}%` : "–";
 
 export const fmtDate = (iso: string): string => {
   if (!iso) return "TBD";
@@ -18,20 +21,31 @@ export const fmtDate = (iso: string): string => {
 const verdictClass = (v: Tip["verdict"]): string =>
   v === "BET" ? "bet" : v === "MARGINAL" ? "marginal" : "nobet";
 
-const fmtSpread = (line: number): string =>
-  line > 0 ? `+${line.toFixed(1)}` : line.toFixed(1);
+const fmtSpread = (line: number | null | undefined): string => {
+  if (typeof line !== "number" || !Number.isFinite(line)) return "–";
+  return line > 0 ? `+${line.toFixed(1)}` : line.toFixed(1);
+};
+
+const fmtTotal = (line: number | null | undefined): string => {
+  if (typeof line !== "number" || !Number.isFinite(line)) return "–";
+  return line.toFixed(1);
+};
 
 export default function TipCard({ t }: { t: Tip }) {
   const vc = verdictClass(t.verdict);
   const edgePos = t.edge.value > 0;
-  const noBook = t.bookOdds.home == null || t.bookOdds.away == null;
-  const [ph, pa] = t.probs.ml;
-  const [fh, fa] = t.fair.ml;
-  const { line: spreadLine, home_cover: homeCover } = t.probs.spread;
-  const { line: totalLine, over } = t.probs.totals;
-  const under = 1 - over;
-  const homeHot = homeCover >= 0.5;
-  const overHot = over >= 0.5;
+  const noBook = t.bookOdds.ml_home == null || t.bookOdds.ml_away == null;
+  const ph = t.probs.ml.home;
+  const pa = t.probs.ml.away;
+  const fh = t.fair.ml.home;
+  const fa = t.fair.ml.away;
+  const homeCover = t.probs.spread.home;
+  const over = t.probs.totals.over;
+  const under = t.probs.totals.under;
+  const spreadLine = t.bookOdds.spread;
+  const totalLine = t.bookOdds.total;
+  const homeHot = (homeCover ?? 0) >= 0.5;
+  const overHot = (over ?? 0) >= 0.5;
 
   return (
     <article className="tip-card">
@@ -92,8 +106,8 @@ export default function TipCard({ t }: { t: Tip }) {
               <small>{pct(homeCover)} cover</small>
             </div>
             <div className={`market-side ${!homeHot ? "hot" : ""}`}>
-              <b>{t.away} {fmtSpread(-spreadLine)}</b>
-              <small>{pct(1 - homeCover)} cover</small>
+              <b>{t.away} {fmtSpread(spreadLine != null ? -spreadLine : null)}</b>
+              <small>{pct(homeCover != null ? 1 - homeCover : null)} cover</small>
             </div>
           </div>
 
@@ -101,11 +115,11 @@ export default function TipCard({ t }: { t: Tip }) {
           <div className="market-row">
             <div className="market-name">Totals</div>
             <div className={`market-side ${overHot ? "hot" : ""}`}>
-              <b>Over {totalLine.toFixed(1)}</b>
+              <b>Over {fmtTotal(totalLine)}</b>
               <small>{pct(over)}</small>
             </div>
             <div className={`market-side ${!overHot ? "hot" : ""}`}>
-              <b>Under {totalLine.toFixed(1)}</b>
+              <b>Under {fmtTotal(totalLine)}</b>
               <small>{pct(under)}</small>
             </div>
           </div>
@@ -128,6 +142,14 @@ export default function TipCard({ t }: { t: Tip }) {
               .join(" · ")}
           </div>
         )}
+
+        <div className="viz-stack">
+          <OddsRadar t={t} />
+          <div className="viz-duel-row">
+            <CrowdBars t={t} />
+            <TeamDuel t={t} />
+          </div>
+        </div>
 
         {t.crowd && (
           <div className="crowd-box">

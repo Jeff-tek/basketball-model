@@ -6,23 +6,26 @@ export type TeamMeta = {
   wins: number | null;
   losses: number | null;
   winPct: number | null;
-  homeRecord: string | null;
-  awayRecord: string | null;
+  streak: string | null;
+  pf: number | null;
+  pa: number | null;
 } | null;
+
+type ProbNull = number | null;
 
 export type Tip = {
   home: string;
   away: string;
   date: string;
   probs: {
-    ml: [number, number];
-    spread: { line: number; home_cover: number };
-    totals: { line: number; over: number };
+    ml: { home: ProbNull; away: ProbNull };
+    spread: { home: ProbNull; away: ProbNull };
+    totals: { over: ProbNull; under: ProbNull };
   };
   fair: {
-    ml: [number, number];
-    spread: { line: number; home_cover: number };
-    totals: { line: number; over: number };
+    ml: { home: ProbNull; away: ProbNull };
+    spread: { home: ProbNull; away: ProbNull };
+    totals: { over: ProbNull; under: ProbNull };
   };
   edge: { market: string; value: number };
   pick: string;
@@ -43,7 +46,15 @@ export type Tip = {
   awayForm: string;
   homePace: number;
   awayPace: number;
-  bookOdds: { home: number | null; away: number | null };
+  bookOdds: {
+    ml_home: number | null;
+    ml_away: number | null;
+    spread: number | null;
+    spread_price: number | null;
+    total: number | null;
+    over_price: number | null;
+    under_price: number | null;
+  };
   teamMeta?: { home: TeamMeta; away: TeamMeta };
 };
 
