@@ -47,6 +47,7 @@ Git identity: Jeff-tek <75492107+Jeff-tek@users.noreply.github.com>.
 - NEW ingest/__init__.py (empty package marker)
 - FIX 2026-09-15 Vercel 404 on `/`: API-only deploy — vercel.json lacked frontend build/route + frontend/ lacked Next scaffold. Added frontend/package.json, next.config.mjs, tsconfig.json, app/layout.tsx; vercel.json now dual-build + /(.*)→frontend/$1 (mirrors football-model).
 - NEW tests/test_ingest.py — 37 tests (espn 20 / euroleague 9 / odds 8), all PASS via `python3 tests/test_ingest.py` (no pytest needed; sys.path bootstrap included)
+- FIX 2026-09-15 `/api/tips` 404 `{"detail":"Not Found"}`: vercel.json routed `/api/(.*)` straight to `server/main.py` (defines `@app.get("/tips")`, no `/api` prefix, no Mangum handler). Mirrored football-model: NEW `api/index.py` (`sys.path` + `app.root_path="/api"` + `Mangum(app)`), vercel.json `server/main.py` → `api/index.py`, requirements.txt += `mangum>=0.17`.
 
 ## Data sources (free only)
 - ESPN free: NBA scoreboard/schedules/standings + nba/lines (spread/total/ML open-close)
