@@ -1,0 +1,542 @@
+/* ============================================================
+   Basketball-Model — court-themed design system
+   Palette: court orange, hardwood tan, black/white contrast
+   ============================================================ */
+:root {
+  /* Court */
+  --court: #ea580c;
+  --court-deep: #c2410c;
+  --court-soft: #fff1e6;
+  --court-line: #f97316;
+
+  /* Hardwood */
+  --hardwood: #b45309;
+  --hardwood-soft: #fdf3e7;
+  --hardwood-line: #d9a05b;
+
+  /* Neutral */
+  --ink: #111111;
+  --ink-2: #3f3f3f;
+  --ink-3: #6b6b6b;
+  --paper: #faf7f2;
+  --paper-2: #f3ede4;
+  --paper-3: #e9e0d3;
+  --line: #d8cdbd;
+  --line-strong: #b8a98f;
+
+  /* Verdicts */
+  --bet: #15803d;
+  --bet-soft: #e8f5ec;
+  --marginal: #b45309;
+  --marginal-soft: #fdf3e7;
+  --nobet: #6b6b6b;
+  --nobet-soft: #f0ece6;
+
+  /* Ball */
+  --ball-radius: 9999px;
+  --card-radius: 14px;
+
+  --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+  --display: Georgia, "Times New Roman", serif;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  background: var(--paper);
+  color: var(--ink);
+  font-family: var(--sans);
+  font-size: 16px;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+}
+
+.wrap {
+  max-width: 1180px;
+  margin: 0 auto;
+  padding: 32px 24px 64px;
+}
+
+/* ---- Masthead ---- */
+.masthead {
+  border-bottom: 3px solid var(--ink);
+  padding-bottom: 16px;
+  margin-bottom: 28px;
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 24px;
+  flex-wrap: wrap;
+}
+.masthead .title {
+  font-family: var(--display);
+  font-size: clamp(2rem, 5vw, 3rem);
+  margin: 0;
+  letter-spacing: -0.02em;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+.kicker {
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.14em;
+  color: var(--court);
+  font-weight: 700;
+}
+.sub {
+  color: var(--ink-2);
+  font-size: 0.92rem;
+  max-width: 42ch;
+  text-align: right;
+}
+
+/* Ball motif */
+.ball-mark {
+  display: inline-block;
+  width: 34px;
+  height: 34px;
+  border-radius: var(--ball-radius);
+  background: var(--court);
+  position: relative;
+  flex-shrink: 0;
+  box-shadow: inset -4px -4px 0 rgba(0, 0, 0, 0.18);
+}
+.ball-mark::before {
+  content: "";
+  position: absolute;
+  left: 50%;
+  top: 0;
+  bottom: 0;
+  width: 2px;
+  background: rgba(255, 255, 255, 0.85);
+  transform: translateX(-50%);
+}
+.ball-mark::after {
+  content: "";
+  position: absolute;
+  top: 50%;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: rgba(255, 255, 255, 0.85);
+  transform: translateY(-50%);
+}
+
+/* ---- League tabs ---- */
+.league-tabs {
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  padding-bottom: 4px;
+  margin-bottom: 14px;
+}
+.league-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  white-space: nowrap;
+  font-size: 0.82rem;
+  font-weight: 700;
+  color: var(--ink-2);
+  background: var(--paper-2);
+  border: 1.5px solid var(--line-strong);
+  border-radius: var(--ball-radius);
+  padding: 7px 14px;
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+}
+.league-tab:hover { border-color: var(--court); color: var(--court-deep); }
+.league-tab.active {
+  background: var(--ink);
+  color: var(--paper);
+  border-color: var(--ink);
+}
+.tab-count {
+  font-size: 0.7rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  background: var(--paper-3);
+  color: var(--ink-2);
+  border-radius: var(--ball-radius);
+  padding: 1px 8px;
+}
+.league-tab.active .tab-count { background: var(--paper); color: var(--ink); }
+
+/* ---- Tips meta ---- */
+.tips-head {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+.tips-controls { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+.tips-controls select {
+  width: auto;
+  min-width: 180px;
+  font-family: var(--sans);
+  font-size: 0.9rem;
+  color: var(--ink);
+  background: var(--paper);
+  border: 1.5px solid var(--line-strong);
+  border-radius: 8px;
+  padding: 7px 9px;
+}
+.refresh {
+  font-size: 0.9rem;
+  font-weight: 700;
+  background: var(--ink);
+  color: var(--paper);
+  border: 0;
+  border-radius: 8px;
+  padding: 10px 18px;
+  cursor: pointer;
+}
+.refresh:disabled { opacity: 0.4; cursor: not-allowed; }
+.tips-meta { font-size: 0.78rem; color: var(--ink-3); margin: 4px 0 20px; }
+
+/* ---- Tips grid ---- */
+.tips-list {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 18px;
+}
+@media (min-width: 900px) {
+  .tips-list { grid-template-columns: 1fr 1fr; align-items: start; }
+}
+
+/* ---- Tip card ---- */
+.tip-card {
+  border: 2px solid var(--ink);
+  border-radius: var(--card-radius);
+  overflow: hidden;
+  background: #fff;
+  box-shadow: 0 2px 0 rgba(0, 0, 0, 0.06);
+  animation: bounce-in 0.45s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+@keyframes bounce-in {
+  0% { opacity: 0; transform: translateY(14px) scale(0.98); }
+  60% { opacity: 1; transform: translateY(-3px) scale(1.005); }
+  100% { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+.tip-top {
+  padding: 16px 18px 12px;
+  border-bottom: 1px solid var(--line);
+  background: linear-gradient(180deg, #fff 0%, var(--paper) 100%);
+}
+.tip-matchup {
+  font-family: var(--display);
+  font-size: 1.35rem;
+  font-weight: 700;
+  line-height: 1.15;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.tip-matchup .vs {
+  color: var(--court);
+  font-style: italic;
+  font-weight: 700;
+  font-size: 0.95rem;
+  padding: 0 2px;
+}
+.tip-meta {
+  font-size: 0.78rem;
+  color: var(--ink-2);
+  margin-top: 6px;
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+/* ---- Verdict band ---- */
+.tip-band {
+  padding: 12px 18px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  border-bottom: 1px solid var(--line);
+}
+.tip-band.bet { background: var(--bet-soft); }
+.tip-band.marginal { background: var(--marginal-soft); }
+.tip-band.nobet { background: var(--nobet-soft); }
+.tip-band .word {
+  font-family: var(--display);
+  font-size: 1.5rem;
+  font-weight: 700;
+  line-height: 1;
+}
+.tip-band.bet .word { color: var(--bet); }
+.tip-band.marginal .word { color: var(--marginal); }
+.tip-band.nobet .word { color: var(--ink-3); }
+
+.tip-pickbox {
+  text-align: right;
+  font-size: 0.8rem;
+  color: var(--ink-2);
+}
+.tip-pickbox b {
+  display: block;
+  font-family: var(--display);
+  font-size: 1rem;
+  color: var(--ink);
+}
+
+/* ---- Confidence badge ---- */
+.confidence-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  padding: 3px 10px;
+  border-radius: var(--ball-radius);
+  text-transform: uppercase;
+  background: var(--court-soft);
+  color: var(--court-deep);
+  border: 1px solid var(--court-line);
+}
+.confidence-badge .dot {
+  width: 7px;
+  height: 7px;
+  border-radius: var(--ball-radius);
+  background: var(--court);
+}
+
+/* ---- Verdict pill ---- */
+.verdict-pill {
+  display: inline-block;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  padding: 3px 10px;
+  border-radius: var(--ball-radius);
+  text-transform: uppercase;
+}
+.verdict-pill.bet { background: var(--bet-soft); color: var(--bet); }
+.verdict-pill.marginal { background: var(--marginal-soft); color: var(--marginal); }
+.verdict-pill.nobet { background: var(--nobet-soft); color: var(--ink-3); }
+
+/* ---- Edge badge ---- */
+.edge-badge {
+  display: inline-block;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  padding: 3px 10px;
+  border-radius: var(--ball-radius);
+  text-transform: uppercase;
+}
+.edge-badge.pos { background: var(--bet-soft); color: var(--bet); }
+.edge-badge.neg { background: var(--nobet-soft); color: var(--ink-3); }
+
+/* ---- Body ---- */
+.tip-body { padding: 14px 18px 18px; }
+
+/* ---- Market rows: ML / Spread / Totals ---- */
+.market-rows {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 14px;
+}
+.market-row {
+  display: grid;
+  grid-template-columns: 84px 1fr 1fr;
+  gap: 8px;
+  align-items: center;
+  background: var(--paper);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 8px 10px;
+}
+.market-row .market-name {
+  font-size: 0.68rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--ink-3);
+  font-weight: 700;
+}
+.market-row .market-side {
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: var(--ink-2);
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.market-row .market-side b {
+  font-size: 1rem;
+  color: var(--ink);
+  font-variant-numeric: tabular-nums;
+}
+.market-row .market-side small {
+  font-size: 0.68rem;
+  color: var(--ink-3);
+  font-weight: 500;
+}
+.market-row .market-side.hot b { color: var(--court-deep); }
+
+/* ---- Steam / line move ---- */
+.steam-line {
+  font-size: 0.78rem;
+  color: var(--ink-2);
+  margin: 10px 0 2px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.steam-line::before {
+  content: "";
+  width: 8px;
+  height: 8px;
+  border-radius: var(--ball-radius);
+  background: var(--court);
+  flex-shrink: 0;
+}
+
+/* ---- Crowd box ---- */
+.crowd-box {
+  background: var(--paper-2);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 10px 12px;
+  margin: 10px 0 2px;
+}
+.crowd-box .crowd-title {
+  font-size: 0.68rem;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--ink-3);
+  font-weight: 700;
+  margin-bottom: 6px;
+}
+.crowd-bars {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.crowd-bar-row {
+  display: grid;
+  grid-template-columns: 64px 1fr 44px;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.78rem;
+}
+.crowd-bar-row .crowd-k { color: var(--ink-2); font-weight: 600; }
+.crowd-track {
+  position: relative;
+  height: 8px;
+  background: var(--paper-3);
+  border-radius: 4px;
+  overflow: hidden;
+}
+.crowd-track .fill {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  border-radius: 4px;
+  background: var(--court);
+  transition: width 0.5s cubic-bezier(0.22, 1, 0.36, 1);
+}
+.crowd-bar-row .crowd-v {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  font-weight: 700;
+  color: var(--ink);
+}
+.crowd-low {
+  font-size: 0.68rem;
+  color: var(--ink-3);
+  margin-top: 6px;
+  font-style: italic;
+}
+
+/* ---- Reasons ---- */
+.tip-reasons {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  margin: 12px 0;
+}
+.tip-reason {
+  font-size: 0.8rem;
+  color: var(--ink-2);
+  padding-left: 16px;
+  position: relative;
+}
+.tip-reason::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 7px;
+  width: 8px;
+  height: 8px;
+  border-radius: var(--ball-radius);
+  background: var(--court);
+  opacity: 0.7;
+}
+
+/* ---- Sources ---- */
+.source-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  border-top: 1px solid var(--line);
+  padding-top: 12px;
+}
+.source-link {
+  font-size: 0.75rem;
+  color: var(--court-deep);
+  text-decoration: none;
+  font-weight: 700;
+}
+.source-link:hover { text-decoration: underline; }
+
+/* ---- Empty / error ---- */
+.empty {
+  color: var(--ink-3);
+  font-size: 0.9rem;
+  padding: 40px 20px;
+  text-align: center;
+  border: 2px dashed var(--line-strong);
+  border-radius: var(--card-radius);
+  background: var(--paper-2);
+}
+.err { color: var(--nobet); font-size: 0.85rem; }
+
+/* ---- Disclaimer ---- */
+.disclaimer {
+  margin-top: 24px;
+  border: 1px dashed var(--line-strong);
+  border-radius: var(--card-radius);
+  padding: 14px 16px;
+  font-size: 0.78rem;
+  color: var(--ink-2);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  background: var(--paper-2);
+}
+.disclaimer b { color: var(--ink); }
+
+/* ---- Court-line accent divider ---- */
+.court-divider {
+  height: 4px;
+  background: repeating-linear-gradient(
+    90deg,
+    var(--ink) 0 24px,
+    var(--court) 24px 48px,
+    var(--paper-3) 48px 72px
+  );
+  border-radius: 2px;
+  margin: 18px 0;
+}
