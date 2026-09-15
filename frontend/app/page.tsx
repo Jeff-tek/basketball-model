@@ -51,7 +51,7 @@ export default function TipsPage() {
           leagues={LEAGUES}
           active={league}
           counts={data ? { [data.league]: data.tips.length } : {}}
-          onChange={setLeague}
+          onChange={(lg) => setLeague(lg as (typeof LEAGUES)[number])}
         />
         <div className="tips-controls">
           <button
