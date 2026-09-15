@@ -45,6 +45,7 @@ Git identity: Jeff-tek <75492107+Jeff-tek@users.noreply.github.com>.
 - NEW ingest/euroleague_free.py — official api-live.euroleague.net: v1/results XML (whole season, scores+played), v2/competitions/E/seasons (current season = first winner:null), v3 .../rounds/{n}/basicstandings (round = max played gameday); TTL 600s; no odds here (→ odds_free); never raises
 - NEW ingest/odds_free.py — The Odds API v4 basketball_nba + basketball_euroleague, h2h/spreads/totals decimal, key from env ODDS_API_KEY, called only on demand, no key → []/None, standings always []; match_game() fuzzy-joins odds games to ESPN names
 - NEW ingest/__init__.py (empty package marker)
+- FIX 2026-09-15 Vercel 404 on `/`: API-only deploy — vercel.json lacked frontend build/route + frontend/ lacked Next scaffold. Added frontend/package.json, next.config.mjs, tsconfig.json, app/layout.tsx; vercel.json now dual-build + /(.*)→frontend/$1 (mirrors football-model).
 - NEW tests/test_ingest.py — 37 tests (espn 20 / euroleague 9 / odds 8), all PASS via `python3 tests/test_ingest.py` (no pytest needed; sys.path bootstrap included)
 
 ## Data sources (free only)
