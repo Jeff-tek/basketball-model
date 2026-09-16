@@ -27,11 +27,13 @@ Git identity: Jeff-tek <75492107+Jeff-tek@users.noreply.github.com>.
   default so old fake events still pass; envelope gains ttl + cron.
 
 ## Units (parallel, files only — NO commit/push by agents)
-- [ ] Unit 1 backend: NEW db.py, requirements.txt, server/main.py
-- [ ] Unit 2 engine: engine/bball.py
-- [ ] Unit 3 ingest: ingest/espn_free.py, NEW ingest/polymarket_free.py
-- [ ] Unit 4 frontend+workflow+tests: tips.ts, ModelVisuals.tsx, page.tsx,
+- [x] Unit 1 backend: NEW db.py, requirements.txt, server/main.py
+- [x] Unit 2 engine: engine/bball.py (46/46 green)
+- [x] Unit 3 ingest: ingest/espn_free.py, NEW ingest/polymarket_free.py (37/37 green)
+- [x] Unit 4 frontend+workflow+tests: tips.ts, ModelVisuals.tsx, page.tsx,
       NEW .github/workflows/warm.yml, tests/test_server.py
+- [x] Verified + shipped 991c97c main->main 2026-09-16. py_compile clean,
+      engine 46/46, ingest 37/37, server suite via CI (no fastapi locally).
 
 ## Gotchas
 - NEVER `git add -A`; explicit paths only. Agents must NOT commit/push.
