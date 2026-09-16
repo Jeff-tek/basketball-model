@@ -136,7 +136,8 @@ def test_scoreboard_empty_events(mock_get):
     mock_get.return_value = _mock_get(_scoreboard_resp())
     from ingest.espn_free import fetch_scoreboard
     assert fetch_scoreboard() == []
-    mock_get.assert_called_once()
+    # default window + explicit today-date query
+    assert mock_get.call_count == 2
 
 
 @patch("ingest.espn_free.requests.get")

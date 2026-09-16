@@ -25,6 +25,15 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+
+@app.on_event("startup")
+def _ensure_tables():
+    try:
+        from db import init_db
+        init_db()
+    except Exception:
+        pass
+
 LEAGUES = {"NBA": "NBA", "EuroLeague": "EuroLeague"}
 ESPN_SLUGS = {"NBA": "nba", "EuroLeague": "euroleague"}
 CACHE_TTL = 120  # seconds
@@ -320,7 +329,8 @@ def _pace_for_game(home_name: str, away_name: str, home_id: str,
 
 
 def _engine_tip(home_name: str, away_name: str, home_id: str, away_id: str,
-                odds: dict, espn_key: str, league: str) -> Optional[dict]:
+                odds: dict, espn_key: str, league: str,
+                crowd_ml: Optional[dict] = None) -> Optional[dict]:
     """Compose engine.bball.build_tip with form from ingest schedules."""
     try:
         from engine.bball import build_tip
@@ -334,7 +344,7 @@ def _engine_tip(home_name: str, away_name: str, home_id: str, away_id: str,
     if not ratings:
         return None
     try:
-        tip = build_tip(ratings, _market_from_odds(odds))
+        tip = build_tip(ratings, _market_from_odds(odds), crowd_ml=crowd_ml)
     except Exception:
         return None
     return _normalize_tip(tip)
@@ -355,6 +365,17 @@ def _fetch_events(league: str, espn_key: str) -> list:
                        lambda: espn_free.fetch_scoreboard(espn_key))
     except Exception:
         return []
+
+
+@app.get("/crowd-trend")
+def crowd_trend_endpoint(league: str, home: str, away: str, match_date: str):
+    """Crowd snapshot history + trend for a fixture. Empty when no history/DB."""
+    try:
+        from db import crowd_history, crowd_trend as _trend
+        return {"history": crowd_history(league, home, away, match_date),
+                "trend": _trend(league, home, away, match_date)}
+    except Exception as e:
+        return {"history": [], "trend": None, "error": str(e)}
 
 
 @app.get("/tips")
@@ -378,17 +399,36 @@ def tips(league: str = "NBA") -> dict:
         home_form = ev.get("home_form", "")
         away_form = ev.get("away_form", "")
 
-        if not _is_today(match_date):
+        if ev.get("state", "pre") == "post":
             continue
         ml_home = odds.get("ml_home")
         ml_away = odds.get("ml_away")
         if ml_home and ml_away and min(ml_home, ml_away) <= 1:
             continue
 
+        # Crowd first: votes in the ensemble (~12%, skipped when thin),
+        # persisted per call (throttled 30min) for matchday intensity trends.
+        # Cache key includes match_date so matchdays never read stale sentiment.
+        crowd = None
+        try:
+            from ingest.polymarket_free import crowd_lookup
+            crowd = _cached(f"crowd:{home_name}|{away_name}|{match_date}",
+                            lambda: crowd_lookup(home_name, away_name, match_date))
+        except Exception:
+            crowd = None
+        crowd_ml = None
+        if crowd and not crowd.get("low_volume"):
+            try:
+                crowd_ml = {"home": float(crowd["home"]),
+                            "away": float(crowd["away"])}
+            except (KeyError, TypeError, ValueError):
+                crowd_ml = None
+
         # Compose engine.bball.build_tip when available, else model-only.
         # Partial boards (a leg OFF/missing) still render as model-only cards.
         tip = _engine_tip(home_name, away_name, home_id, away_id,
-                          odds, espn_key, _display_league(league))
+                          odds, espn_key, _display_league(league),
+                          crowd_ml=crowd_ml)
         if not tip:
             tip = _model_only_tip(home_name, away_name, odds)
         note = _missing_odds_note(odds)
@@ -406,14 +446,16 @@ def tips(league: str = "NBA") -> dict:
         if tip.get("tags"):
             sources.append({"name": "The Open Model", "url": "https://theopenmodel.com"})
 
-        # Crowd (Polymarket public money) — display only, never feeds the pick
-        crowd = None
+        # Snapshot crowd for intraday trend (best-effort, never breaks tips)
+        crowd_trend = None
         try:
-            from ingest.polymarket_free import crowd_lookup
-            crowd = _cached(f"crowd:{home_name}|{away_name}",
-                            lambda: crowd_lookup(home_name, away_name, match_date))
+            from db import record_crowd_snapshot, crowd_trend as _trend
+            record_crowd_snapshot(_display_league(league), home_name,
+                                  away_name, match_date, crowd)
+            crowd_trend = _trend(_display_league(league), home_name,
+                                 away_name, match_date)
         except Exception:
-            crowd = None
+            crowd_trend = None
 
         # Line movement (open → close, decimal) — display only
         line_move = None
@@ -477,6 +519,7 @@ def tips(league: str = "NBA") -> dict:
             "lineMove": line_move,
             "models": tip.get("models", []),
             "crowd": crowd,
+            "crowdTrend": crowd_trend,
             "sources": sources,
             "homeForm": home_form, "awayForm": away_form,
             "homePace": home_pace,
@@ -485,7 +528,9 @@ def tips(league: str = "NBA") -> dict:
                          "away": _team_meta(smap.get(away_name.lower()))},
         })
 
+    tips_list.sort(key=lambda t: t.get("date") or "")
     return {"league": league, "as_of": datetime.now(timezone.utc).isoformat(),
+            "ttl": 180, "cron": "github: warm-tips daily+2h",
             "tips": tips_list}
 
 

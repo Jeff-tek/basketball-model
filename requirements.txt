@@ -2,3 +2,5 @@ fastapi>=0.110
 uvicorn[standard]>=0.29
 requests>=2.31
 mangum>=0.17
+SQLAlchemy>=2.0
+psycopg2-binary>=2.9

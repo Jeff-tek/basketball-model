@@ -14,9 +14,9 @@ from server.main import (  # noqa: E402
 
 
 def test_tips_envelope():
-    """GET /tips returns {league, as_of, tips} with a list."""
+    """GET /tips returns {league, as_of, ttl, cron, tips}."""
     result = tips(league="NBA")
-    assert set(result) == {"league", "as_of", "tips"}
+    assert set(result) == {"league", "as_of", "ttl", "cron", "tips"}
     assert result["league"] == "NBA"
     assert isinstance(result["tips"], list)
 
@@ -190,21 +190,41 @@ def test_tips_model_only_fallback():
 
 
 def test_tips_skips_non_today():
-    """Past-dated events are filtered out of the tips list."""
+    """Post-state events filtered; pre-match with old dates kept; no state → pre."""
     from server import main
-    fake_events = [{
-        "home": "Lakers", "away": "Celtics",
-        "date": "2020-01-01T00:00:00Z",
-        "home_id": "1", "away_id": "2",
-        "odds": {"ml_home": 1.85, "ml_away": 2.10},
-    }]
+    fake_events = [
+        {
+            "home": "Lakers", "away": "Celtics",
+            "date": datetime.now(timezone.utc).isoformat(),
+            "home_id": "1", "away_id": "2",
+            "state": "post",  # (a) post → filtered
+            "odds": {"ml_home": 1.85, "ml_away": 2.10},
+        },
+        {
+            "home": "Warriors", "away": "Heat",
+            "date": "2020-01-01T00:00:00Z",
+            "home_id": "3", "away_id": "4",
+            "state": "pre",  # (b) pre-match + old date → kept
+            "odds": {"ml_home": 1.85, "ml_away": 2.10},
+        },
+        {
+            "home": "Nuggets", "away": "Mavericks",
+            "date": datetime.now(timezone.utc).isoformat(),
+            "home_id": "5", "away_id": "6",
+            # (c) no state → server defaults to "pre"
+            "odds": {"ml_home": 1.85, "ml_away": 2.10},
+        },
+    ]
     orig_fetch = main._fetch_events
     main._fetch_events = lambda league, espn_key: fake_events
     try:
         result = main.tips(league="NBA")
     finally:
         main._fetch_events = orig_fetch
-    assert result["tips"] == []
+    names = [(t["home"], t["away"]) for t in result["tips"]]
+    assert ("Lakers", "Celtics") not in names, "post-state should be filtered"
+    assert ("Warriors", "Heat") in names, "pre-match with old date should be kept"
+    assert ("Nuggets", "Mavericks") in names, "no state defaults to pre"
 
 
 if __name__ == "__main__":

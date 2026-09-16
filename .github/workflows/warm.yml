@@ -1,0 +1,30 @@
+# Warms /tips so caches + crowd snapshots stay fresh daily and intraday.
+# Hitting /tips warms the server cache and appends crowd snapshots.
+# Required repo secret: PROD_URL (e.g. https://your-app.vercel.app).
+# Optional: CRON_SECRET (only if the backend sets it; currently open).
+name: warm-tips
+
+on:
+  schedule:
+    - cron: "0 6 * * *" # daily morning warm
+    - cron: "0 8-22/2 * * *" # matchday intraday, every 2h 08:00-22:00 UTC
+  workflow_dispatch: {}
+
+jobs:
+  warm:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Warm /tips per league
+        env:
+          PROD_URL: ${{ secrets.PROD_URL }}
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+        run: |
+          : "${PROD_URL:?Set PROD_URL repo secret to the Vercel app URL}"
+          for lg in "NBA" "EuroLeague"; do
+            enc=$(python3 -c "import urllib.parse,sys; print(urllib.parse.quote(sys.argv[1]))" "$lg")
+            if [ -n "$CRON_SECRET" ]; then
+              curl -s -o /dev/null -w "$lg %{http_code}\n" -H "Authorization: Bearer $CRON_SECRET" "$PROD_URL/api/tips?league=$enc"
+            else
+              curl -s -o /dev/null -w "$lg %{http_code}\n" "$PROD_URL/api/tips?league=$enc"
+            fi
+          done

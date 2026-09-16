@@ -270,11 +270,27 @@ def _parse_event(ev):
 
 
 def fetch_scoreboard():
-    """Live + upcoming NBA games."""
+    """Live + upcoming NBA games.
+
+    Merges ESPN's default window with an explicit today-date query —
+    the default window lags on matchdays (ESPN still serving yesterday's
+    FTs while today's fixtures only exist under ?dates=YYYYMMDD).
+    """
+    from datetime import datetime, timezone
     data = _get(f"{BASE}/scoreboard")
-    if not data:
-        return []
-    return [m for m in (_parse_event(ev) for ev in data.get("events", []) or []) if m]
+    events = list((data.get("events", []) or []) if data else [])
+    today = datetime.now(timezone.utc).strftime("%Y%m%d")
+    dated = _get(f"{BASE}/scoreboard", params={"dates": today})
+    if dated:
+        events += dated.get("events", []) or []
+    seen = {}
+    for ev in events:
+        if not isinstance(ev, dict):
+            continue
+        key = str(ev.get("id")) if ev.get("id") is not None else \
+            f"{ev.get('date')}|{ev.get('name')}"
+        seen[key] = ev
+    return [m for m in (_parse_event(ev) for ev in seen.values()) if m]
 
 
 def fetch_teams():

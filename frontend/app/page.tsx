@@ -12,6 +12,7 @@ export default function TipsPage() {
   const [data, setData] = useState<TipsResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const [updatedAt, setUpdatedAt] = useState<number | null>(null);
 
   const load = useCallback(async (lg: string) => {
     setLoading(true);
@@ -19,6 +20,7 @@ export default function TipsPage() {
     try {
       const res = await getTips(lg);
       setData(res);
+      setUpdatedAt(Date.now());
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed to load tips");
       setData(null);
@@ -29,6 +31,8 @@ export default function TipsPage() {
 
   useEffect(() => {
     void load(league);
+    const id = setInterval(() => void load(league), 15 * 60 * 1000);
+    return () => clearInterval(id);
   }, [league, load]);
 
   return (
@@ -67,6 +71,7 @@ export default function TipsPage() {
       {data && (
         <div className="tips-meta">
           League {data.league} · as of {data.as_of} · TTL {data.ttl}s · cron {data.cron}
+          {updatedAt != null && !loading && ` · updated ${new Date(updatedAt).toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" })}`}
         </div>
       )}
 
