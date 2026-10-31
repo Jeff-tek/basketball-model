@@ -293,6 +293,15 @@ def test_team_form_last_five_in_date_order():
     assert form["home_points_for"] == (95 + 101 + 130 + 125 + 120) / 5
 
 
+def test_market_from_odds_no_default_lines():
+    """Missing lines stay None so the engine skips those markets."""
+    from server import main
+    market = main._market_from_odds({"ml_home": 1.9, "ml_away": 1.9})
+    assert market["spread"] is None
+    assert market["total"] is None
+    assert market["home_ml"] == 1.9
+
+
 if __name__ == "__main__":
     tests = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
     for t in tests:

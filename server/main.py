@@ -252,12 +252,17 @@ def _ratings_from_form(home_name: str, away_name: str, home_id: str,
 
 
 def _market_from_odds(odds: dict) -> dict:
-    """Engine market dict {spread, total, home_ml, away_ml} from ingest odds."""
+    """Engine market dict {spread, total, home_ml, away_ml} from ingest odds.
+
+    No default line: the engine skips a market it has no line for. A hardcoded
+    total (220) mispriced EuroLeague, whose totals sit near 160-170, and turned
+    every EL card into a ~100% "Under" on a line nobody had quoted.
+    """
     return {
-        "spread": odds.get("spread", 0.0),
-        "total": odds.get("total", 220.0),
+        "spread": odds.get("spread"),
+        "total": odds.get("total"),
         "home_ml": odds.get("ml_home"),
-        "away_ml": odds.get("ml_away"),
+        "away_ml": odds.get("away_ml"),
     }
 
 
