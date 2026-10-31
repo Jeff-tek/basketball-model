@@ -19,7 +19,10 @@ jobs:
           PROD_URL: ${{ secrets.PROD_URL }}
           CRON_SECRET: ${{ secrets.CRON_SECRET }}
         run: |
-          : "${PROD_URL:?Set PROD_URL repo secret to the Vercel app URL}"
+          # Fall back to the known production URL so the cron works even
+          # when the PROD_URL repo secret is unset (it was, and every run
+          # since 2026-09-16 failed at this line).
+          : "${PROD_URL:=https://basketball-model.vercel.app}"
           for lg in "NBA" "EuroLeague"; do
             enc=$(python3 -c "import urllib.parse,sys; print(urllib.parse.quote(sys.argv[1]))" "$lg")
             if [ -n "$CRON_SECRET" ]; then
