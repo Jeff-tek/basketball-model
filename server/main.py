@@ -168,6 +168,40 @@ def _model_only_tip(home_name: str, away_name: str,
     }
 
 
+def _fallback_odds(league: str, home: str, away: str) -> dict:
+    """Book odds from The Odds API when the primary feed has none.
+
+    EuroLeague has no odds in euroleague_free (ESPN carries none), so without
+    this its cards can never show an edge check. Key-gated and free-tier: with
+    no ODDS_API_KEY this returns {} and nothing changes.
+    """
+    try:
+        from ingest import odds_free
+        sport = "euroleague" if league == "EuroLeague" else "nba"
+        games = _cached(f"oddsapi:{sport}",
+                        lambda: odds_free.fetch_scoreboard(sport))
+    except Exception:
+        return {}
+    for g in games or []:
+        if not odds_free.match_game(g, home, away):
+            continue
+        o = g.get("odds") or {}
+        if not (o.get("home") and o.get("away")):
+            return {}
+        return {
+            "provider": o.get("provider", ""),
+            "ml_home": o.get("home"),
+            "ml_away": o.get("away"),
+            "spread": o.get("spread"),
+            "spread_price": o.get("spread_odds"),
+            "total": o.get("total"),
+            "over_price": o.get("total_odds"),
+            "under_price": None,
+            "open": {},
+        }
+    return {}
+
+
 def _team_form(hs: list, as_: list, home_name: str, away_name: str) -> Optional[dict]:
     """Last-5 avg points for/against + record string from schedule rows."""
     def avg(sched: list, team: str) -> Optional[tuple]:
@@ -420,6 +454,10 @@ def tips(league: str = "NBA") -> dict:
         away_name = ev.get("away", "")
         match_date = ev.get("date", "")
         odds = ev.get("odds") or {}
+        if not (odds.get("ml_home") and odds.get("ml_away")):
+            fallback = _fallback_odds(_display_league(league), home_name, away_name)
+            if fallback:
+                odds = fallback
         open_odds = odds.get("open") or {}
         home_id = ev.get("home_id", "")
         away_id = ev.get("away_id", "")

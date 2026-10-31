@@ -302,6 +302,45 @@ def test_market_from_odds_no_default_lines():
     assert market["home_ml"] == 1.9
 
 
+def test_fallback_odds_maps_odds_api_shape():
+    """EuroLeague has no odds in its own feed; Odds API fills the book legs."""
+    from server import main
+    from ingest import odds_free
+    orig = odds_free.fetch_scoreboard
+    main._cache.clear()
+    odds_free.fetch_scoreboard = lambda sport="nba": [{
+        "home": "Real Madrid", "away": "Barcelona",
+        "odds": {"provider": "pinnacle", "home": 1.8, "away": 2.0,
+                 "spread": -3.5, "spread_odds": 1.91,
+                 "total": 165.5, "total_odds": 1.95},
+    }]
+    try:
+        o = main._fallback_odds("EuroLeague", "Real Madrid", "Barcelona")
+    finally:
+        odds_free.fetch_scoreboard = orig
+        main._cache.clear()
+    assert o["ml_home"] == 1.8 and o["ml_away"] == 2.0
+    assert o["spread"] == -3.5 and o["spread_price"] == 1.91
+    assert o["total"] == 165.5 and o["over_price"] == 1.95
+
+
+def test_fallback_odds_unknown_fixture_returns_empty():
+    from server import main
+    from ingest import odds_free
+    orig = odds_free.fetch_scoreboard
+    main._cache.clear()
+    odds_free.fetch_scoreboard = lambda sport="nba": [{
+        "home": "Real Madrid", "away": "Barcelona",
+        "odds": {"home": 1.8, "away": 2.0},
+    }]
+    try:
+        assert main._fallback_odds("EuroLeague", "Zalgiris Kaunas",
+                                   "Beşiktaş Istanbul") == {}
+    finally:
+        odds_free.fetch_scoreboard = orig
+        main._cache.clear()
+
+
 if __name__ == "__main__":
     tests = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
     for t in tests:
