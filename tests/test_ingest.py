@@ -160,8 +160,8 @@ def test_scoreboard_parses_match(mock_get):
     assert m["away_score"] == 0
     assert m["home_record"] == "12-5"
     assert m["away_record"] == "9-8"
-    assert m["odds"]["home"] == round(1 + 100 / 330, 3)
-    assert m["odds"]["away"] == 3.6
+    assert m["odds"]["ml_home"] == round(1 + 100 / 330, 3)
+    assert m["odds"]["ml_away"] == 3.6
     assert m["odds"]["spread"] == -7.5
     assert m["odds"]["total"] == 224.5
 
@@ -259,7 +259,7 @@ def test_odds_open_fallback(mock_get):
     ml["home"] = {"open": {"odds": "-110"}}
     mock_get.return_value = _mock_get(_scoreboard_resp([ev]))
     from ingest.espn_free import fetch_scoreboard
-    assert fetch_scoreboard()[0]["odds"]["home"] == round(1 + 100 / 110, 3)
+    assert fetch_scoreboard()[0]["odds"]["ml_home"] == round(1 + 100 / 110, 3)
 
 
 @patch("ingest.espn_free.requests.get")
