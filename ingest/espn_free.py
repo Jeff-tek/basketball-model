@@ -252,7 +252,10 @@ def _odds(comp):
             total = _to_float((o.get("homeTeamOdds") or {}).get("total"))
         return {
             "provider": (o.get("provider") or {}).get("name", ""),
-            "home": h, "away": a,
+            # server odds contract (server/main.py ODDS_LEGS) is ml_home/ml_away;
+            # emitting "home"/"away" here silently nulled bookOdds.ml_* and
+            # killed the edge check on every card.
+            "ml_home": h, "ml_away": a,
             "spread": spread,
             "spread_price": _price((o.get("pointSpread") or {}).get("home")),
             "total": total,

@@ -341,6 +341,29 @@ def test_fallback_odds_unknown_fixture_returns_empty():
         main._cache.clear()
 
 
+def test_espn_odds_satisfy_server_contract():
+    """Ingest odds keys must satisfy the server's ODDS_LEGS contract.
+
+    espn_free used to emit home/away for the moneylines while the server read
+    ml_home/ml_away, so every card showed "Book odds incomplete" and edge was
+    never computed even with a fully priced line.
+    """
+    from server import main
+    from ingest.espn_free import _odds
+    comp = {"odds": [{
+        "provider": {"name": "DraftKings"},
+        "spread": -7.5,
+        "overUnder": 224.5,
+        "moneyline": {"home": {"close": {"odds": "-330"}},
+                      "away": {"close": {"odds": "+260"}}},
+        "pointSpread": {"home": {"close": {"line": "-7.5", "odds": "-105"}}},
+        "total": {"over": {"close": {"line": "o224.5", "odds": "-112"}},
+                  "under": {"close": {"line": "u224.5", "odds": "-108"}}},
+    }]}
+    odds = _odds(comp)
+    assert main._missing_odds_note(odds) is None, sorted(odds)
+
+
 if __name__ == "__main__":
     tests = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
     for t in tests:
