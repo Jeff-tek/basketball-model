@@ -71,6 +71,31 @@ Git identity: Jeff-tek <75492107+Jeff-tek@users.noreply.github.com>.
 - The Odds API: no standings endpoint (returns []); free tier 500 req/mo — only call on demand, never at import
 - ESPN 403s custom User-Agents — never set headers in ingest requests
 
+## FIX 2026-10-31 — empty tips board (PR #1, branch fix/tips-pipeline)
+Symptom: `/api/tips` returned `tips: []` for both leagues with 7 NBA games on the slate.
+Root cause: `server/main.py` was ported from football-model, whose `fetch_scoreboard(league_slug)`
+and `fetch_team_schedule(team_id, league_slug)` take a slug. Basketball's ingest dropped that
+parameter but the server kept passing it, and the defensive `except` hid the failure:
+- `espn_free.fetch_scoreboard(espn_key)` → TypeError → `_fetch_events` → `[]`. **The board bug.**
+- `fetch_team_schedule(id, espn_key)` → `"nba"` used as `season` → non-JSON → no ratings → engine skipped.
+- `_fetch_events` imported `ingest.euroleague_api` (never existed) → EL fell back to ESPN's
+  euroleague scoreboard (always 0 events). `euroleague_free` also read `v1/results`, which only
+  lists played games → upcoming fixtures could never surface.
+- `season` defaulted to `"2026"` = 2025-26 (finished). Current season is `"2027"`.
+- `spread_price`/`over_price`/`under_price` never populated → "Book odds incomplete" on every card;
+  line move read top-level open/close nodes ESPN does not serve.
+- `odds_free` was never called by the server, so EL could never have book odds.
+- Second bug found after the board loaded: `_market_from_odds` defaulted `total=220`, so EL
+  (real totals ~165) produced "Under 100%" on every fixture. Engine now skips markets with no line.
+- `warm-tips` cron has failed on every run since 2026-09-16: repo secret `PROD_URL` is unset.
+
+Changed: server/main.py (_fetch_events, _form_rows, _fallback_odds, _market_from_odds, _team_form,
+_pace_for_game), ingest/espn_free.py (current_season, per-market open/close, prices, _side_lines
+removed), ingest/euroleague_free.py (v2 .../games fixtures, 7-day scoreboard window), tests
+(+11), tools/diagnose.py, .github/workflows/diag.yml.
+Verified in CI (Ubuntu 26.04, py3.12): 49 engine + 38 ingest + 24 server tests, live diagnostic
+7/7 NBA tips and 10/10 EL fixtures with the engine engaged.
+
 ## Resume
 - `git status --short` in /root/basketball-model, read this file, continue first unchecked todo.
 - Ingest done: espn_free (NBA), euroleague_free (EL), odds_free (Odds API fallback). Tests: `python3 tests/test_ingest.py` (37 pass).

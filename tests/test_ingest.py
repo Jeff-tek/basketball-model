@@ -56,22 +56,27 @@ def _dispatch(responses):
 
 
 def _odds_entry(home_ml="-330", away_ml="+260", spread=-7.5, total=224.5):
+    """Real ESPN shape: open/close snapshots nested per market, prices included."""
     return {
         "provider": {"name": "DraftKings"},
         "details": "BOS -7.5",
         "spread": spread,
         "overUnder": total,
         "moneyline": {
-            "home": {"odds": home_ml, "open": {"odds": "-320"}, "close": {"odds": home_ml}},
-            "away": {"odds": away_ml, "open": {"odds": "+250"}, "close": {"odds": away_ml}},
+            "home": {"open": {"odds": "-320"}, "close": {"odds": home_ml}},
+            "away": {"open": {"odds": "+250"}, "close": {"odds": away_ml}},
         },
-        "open": {
-            "home": {"moneyLine": -320, "spread": -7.5, "total": 224.5},
-            "away": {"moneyLine": 250, "spread": 7.5, "total": 224.5},
+        "pointSpread": {
+            "home": {"open": {"line": "-6.5", "odds": "-108"},
+                     "close": {"line": f"{spread}", "odds": "-105"}},
+            "away": {"open": {"line": "+6.5", "odds": "-112"},
+                     "close": {"line": f"{-spread}", "odds": "-115"}},
         },
-        "close": {
-            "home": {"moneyLine": -330, "spread": -7.5, "total": 224.5},
-            "away": {"moneyLine": 260, "spread": 7.5, "total": 224.5},
+        "total": {
+            "over": {"open": {"line": "o223.5", "odds": "-108"},
+                     "close": {"line": f"o{total}", "odds": "-112"}},
+            "under": {"open": {"line": "u223.5", "odds": "-112"},
+                      "close": {"line": f"u{total}", "odds": "-108"}},
         },
     }
 
@@ -227,10 +232,23 @@ def test_odds_open_close_captured(mock_get):
     mock_get.return_value = _mock_get(_scoreboard_resp([_event()]))
     from ingest.espn_free import fetch_scoreboard
     odds = fetch_scoreboard()[0]["odds"]
-    assert odds["open"] == {"home": round(1 + 100 / 320, 3), "away": 3.5,
-                            "spread": -7.5, "total": 224.5}
-    assert odds["close"] == {"home": round(1 + 100 / 330, 3), "away": 3.6,
+    assert odds["open"] == {"ml_home": round(1 + 100 / 320, 3), "ml_away": 3.5,
+                            "spread": -6.5, "total": 223.5}
+    assert odds["close"] == {"ml_home": round(1 + 100 / 330, 3), "ml_away": 3.6,
                              "spread": -7.5, "total": 224.5}
+
+
+@patch("ingest.espn_free.requests.get")
+def test_odds_prices_captured(mock_get):
+    """spread/over/under prices fill bookOdds (otherwise every card reports
+    'Book odds incomplete' even when the line is fully priced)."""
+    _clear_caches()
+    mock_get.return_value = _mock_get(_scoreboard_resp([_event()]))
+    from ingest.espn_free import fetch_scoreboard
+    odds = fetch_scoreboard()[0]["odds"]
+    assert odds["spread_price"] == round(1 + 100 / 105, 3)
+    assert odds["over_price"] == round(1 + 100 / 112, 3)
+    assert odds["under_price"] == round(1 + 100 / 108, 3)
 
 
 @patch("ingest.espn_free.requests.get")

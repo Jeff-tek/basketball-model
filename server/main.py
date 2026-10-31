@@ -168,10 +168,47 @@ def _model_only_tip(home_name: str, away_name: str,
     }
 
 
+def _fallback_odds(league: str, home: str, away: str) -> dict:
+    """Book odds from The Odds API when the primary feed has none.
+
+    EuroLeague has no odds in euroleague_free (ESPN carries none), so without
+    this its cards can never show an edge check. Key-gated and free-tier: with
+    no ODDS_API_KEY this returns {} and nothing changes.
+    """
+    try:
+        from ingest import odds_free
+        sport = "euroleague" if league == "EuroLeague" else "nba"
+        games = _cached(f"oddsapi:{sport}",
+                        lambda: odds_free.fetch_scoreboard(sport))
+    except Exception:
+        return {}
+    for g in games or []:
+        if not odds_free.match_game(g, home, away):
+            continue
+        o = g.get("odds") or {}
+        if not (o.get("home") and o.get("away")):
+            return {}
+        return {
+            "provider": o.get("provider", ""),
+            "ml_home": o.get("home"),
+            "ml_away": o.get("away"),
+            "spread": o.get("spread"),
+            "spread_price": o.get("spread_odds"),
+            "total": o.get("total"),
+            "over_price": o.get("total_odds"),
+            "under_price": None,
+            "open": {},
+        }
+    return {}
+
+
 def _team_form(hs: list, as_: list, home_name: str, away_name: str) -> Optional[dict]:
     """Last-5 avg points for/against + record string from schedule rows."""
     def avg(sched: list, team: str) -> Optional[tuple]:
-        played = [m for m in sched if m.get("played")][-5:]
+        played = [m for m in sched
+                  if m.get("played") and team in (m.get("home"), m.get("away"))]
+        played.sort(key=lambda m: m.get("date") or "")
+        played = played[-5:]
         if not played:
             return None
         pf = pa = 0
@@ -200,16 +237,35 @@ def _team_form(hs: list, as_: list, home_name: str, away_name: str) -> Optional[
     }
 
 
+def _form_rows(league: str, team_id: str, team_name: str) -> list:
+    """Played games for one team, from the league's own source.
+
+    NBA: ESPN per-team schedule (team_id is an ESPN id).
+    EuroLeague: the season fixture list from euroleague_free, matched by club
+    name — ESPN has no EuroLeague schedules, and EL club codes are not ESPN
+    team ids. [] on any failure, never raises.
+    """
+    try:
+        if league == "EuroLeague":
+            from ingest import euroleague_free
+            rows = _cached("form:euroleague",
+                           lambda: euroleague_free.fetch_schedules())
+            return [m for m in rows or []
+                    if team_name in (m.get("home"), m.get("away"))]
+        from ingest import espn_free
+        return _cached(f"form:{team_id}",
+                       lambda: espn_free.fetch_team_schedule(team_id))
+    except Exception:
+        return []
+
+
 def _ratings_from_form(home_name: str, away_name: str, home_id: str,
                        away_id: str, espn_key: str, league: str) -> Optional[dict]:
     """Engine ratings {home_off, home_def, away_off, away_def, home_court}
     from ingest schedules. None when form data is unavailable."""
     try:
-        from ingest import espn_free
-        hs = _cached(f"form:{home_id}",
-                     lambda: espn_free.fetch_team_schedule(home_id, espn_key))
-        as_ = _cached(f"form:{away_id}",
-                      lambda: espn_free.fetch_team_schedule(away_id, espn_key))
+        hs = _form_rows(league, home_id, home_name)
+        as_ = _form_rows(league, away_id, away_name)
         form = _team_form(hs, as_, home_name, away_name)
     except Exception:
         return None
@@ -230,12 +286,17 @@ def _ratings_from_form(home_name: str, away_name: str, home_id: str,
 
 
 def _market_from_odds(odds: dict) -> dict:
-    """Engine market dict {spread, total, home_ml, away_ml} from ingest odds."""
+    """Engine market dict {spread, total, home_ml, away_ml} from ingest odds.
+
+    No default line: the engine skips a market it has no line for. A hardcoded
+    total (220) mispriced EuroLeague, whose totals sit near 160-170, and turned
+    every EL card into a ~100% "Under" on a line nobody had quoted.
+    """
     return {
-        "spread": odds.get("spread", 0.0),
-        "total": odds.get("total", 220.0),
+        "spread": odds.get("spread"),
+        "total": odds.get("total"),
         "home_ml": odds.get("ml_home"),
-        "away_ml": odds.get("ml_away"),
+        "away_ml": odds.get("away_ml"),
     }
 
 
@@ -304,17 +365,14 @@ def _team_meta(row: Optional[dict]) -> Optional[dict]:
 
 
 def _pace_for_game(home_name: str, away_name: str, home_id: str,
-                   away_id: str, espn_key: str) -> tuple:
+                   away_id: str, espn_key: str, league: str) -> tuple:
     """Per-team pace proxy (avg total pts / 2) from schedule form.
 
     Returns (home_pace, away_pace); (0.0, 0.0) on any failure, never raises.
     """
     try:
-        from ingest import espn_free
-        hs = _cached(f"form:{home_id}",
-                     lambda: espn_free.fetch_team_schedule(home_id, espn_key))
-        as_ = _cached(f"form:{away_id}",
-                      lambda: espn_free.fetch_team_schedule(away_id, espn_key))
+        hs = _form_rows(league, home_id, home_name)
+        as_ = _form_rows(league, away_id, away_name)
         form = _team_form(hs, as_, home_name, away_name)
     except Exception:
         return 0.0, 0.0
@@ -351,18 +409,21 @@ def _engine_tip(home_name: str, away_name: str, home_id: str, away_id: str,
 
 
 def _fetch_events(league: str, espn_key: str) -> list:
-    """Scoreboard events from ingest modules (defensive). [] on failure."""
-    if league == "EuroLeague":
-        try:
-            from ingest import euroleague_api
-            return _cached(f"live:{espn_key}",
-                           lambda: euroleague_api.fetch_scoreboard())
-        except Exception:
-            pass
+    """Scoreboard events from ingest modules (defensive). [] on failure.
+
+    Call signatures matter: espn_free.fetch_scoreboard() takes no league
+    argument (the module is NBA-only), while euroleague_free.fetch_scoreboard()
+    owns the EuroLeague fixture list. Passing espn_key to the NBA fetcher
+    raises TypeError and the swallow below turns it into an empty board.
+    """
     try:
+        if league == "EuroLeague":
+            from ingest import euroleague_free
+            return _cached(f"live:{espn_key}",
+                           lambda: euroleague_free.fetch_scoreboard())
         from ingest import espn_free
         return _cached(f"live:{espn_key}",
-                       lambda: espn_free.fetch_scoreboard(espn_key))
+                       lambda: espn_free.fetch_scoreboard())
     except Exception:
         return []
 
@@ -393,6 +454,10 @@ def tips(league: str = "NBA") -> dict:
         away_name = ev.get("away", "")
         match_date = ev.get("date", "")
         odds = ev.get("odds") or {}
+        if not (odds.get("ml_home") and odds.get("ml_away")):
+            fallback = _fallback_odds(_display_league(league), home_name, away_name)
+            if fallback:
+                odds = fallback
         open_odds = odds.get("open") or {}
         home_id = ev.get("home_id", "")
         away_id = ev.get("away_id", "")
@@ -494,7 +559,8 @@ def tips(league: str = "NBA") -> dict:
 
         try:
             home_pace, away_pace = _pace_for_game(
-                home_name, away_name, home_id, away_id, espn_key)
+                home_name, away_name, home_id, away_id, espn_key,
+                _display_league(league))
         except Exception:
             home_pace, away_pace = 0.0, 0.0
 

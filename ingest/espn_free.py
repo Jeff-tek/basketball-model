@@ -18,6 +18,7 @@ import json
 import logging
 import time
 import unicodedata
+from datetime import datetime, timezone
 
 import requests
 
@@ -195,21 +196,38 @@ def _ml(moneyline, side):
     return None
 
 
-def _side_lines(node):
-    """{home, away, spread, total} from an odds open/close node."""
-    out = {"home": None, "away": None, "spread": None, "total": None}
+def _price(node):
+    """Decimal price from a pointSpread/total side node (close preferred)."""
     if not isinstance(node, dict):
-        return out
-    for side in ("home", "away"):
-        leg = node.get(side) or {}
-        if not isinstance(leg, dict):
-            continue
-        if leg.get("moneyLine") is not None:
-            out[side] = american_to_decimal(leg.get("moneyLine"))
-        if out["spread"] is None and leg.get("spread") is not None:
-            out["spread"] = _to_float(leg.get("spread"))
-        if out["total"] is None and leg.get("total") is not None:
-            out["total"] = _to_float(leg.get("total"))
+        return None
+    for key in ("close", "open"):
+        leg = node.get(key) or {}
+        if isinstance(leg, dict) and leg.get("odds") is not None:
+            dec = american_to_decimal(leg.get("odds"))
+            if dec:
+                return dec
+    return None
+
+
+def _lines_at(o, when):
+    """{ml_home, ml_away, spread, total} at 'open' or 'close'.
+
+    ESPN nests the open/close snapshots inside moneyline/pointSpread/total
+    (there is no top-level 'open'/'close' node on the odds entry), so the
+    line-move display has to read them per market.
+    """
+    out = {"ml_home": None, "ml_away": None, "spread": None, "total": None}
+    ml = o.get("moneyline") or {}
+    for side, key in (("home", "ml_home"), ("away", "ml_away")):
+        node = (ml.get(side) or {}).get(when) or {}
+        if isinstance(node, dict) and node.get("odds") is not None:
+            out[key] = american_to_decimal(node.get("odds"))
+    node = ((o.get("pointSpread") or {}).get("home") or {}).get(when) or {}
+    if isinstance(node, dict):
+        out["spread"] = _to_float(node.get("line"))
+    node = ((o.get("total") or {}).get("over") or {}).get(when) or {}
+    if isinstance(node, dict) and node.get("line") is not None:
+        out["total"] = _to_float(str(node.get("line")).lstrip("oO"))
     return out
 
 
@@ -236,9 +254,12 @@ def _odds(comp):
             "provider": (o.get("provider") or {}).get("name", ""),
             "home": h, "away": a,
             "spread": spread,
+            "spread_price": _price((o.get("pointSpread") or {}).get("home")),
             "total": total,
-            "open": _side_lines(o.get("open")),
-            "close": _side_lines(o.get("close")),
+            "over_price": _price((o.get("total") or {}).get("over")),
+            "under_price": _price((o.get("total") or {}).get("under")),
+            "open": _lines_at(o, "open"),
+            "close": _lines_at(o, "close"),
         }
     return {}
 
@@ -269,6 +290,17 @@ def _parse_event(ev):
     }
 
 
+def current_season():
+    """ESPN season parameter for the season in progress.
+
+    ESPN keys NBA seasons by the calendar year they END (2026-27 → "2027").
+    July is the cutover: before it we are still in the season that ends this
+    year, after it the next one has begun.
+    """
+    now = datetime.now(timezone.utc)
+    return str(now.year + 1 if now.month >= 7 else now.year)
+
+
 def fetch_scoreboard():
     """Live + upcoming NBA games.
 
@@ -276,7 +308,6 @@ def fetch_scoreboard():
     the default window lags on matchdays (ESPN still serving yesterday's
     FTs while today's fixtures only exist under ?dates=YYYYMMDD).
     """
-    from datetime import datetime, timezone
     data = _get(f"{BASE}/scoreboard")
     events = list((data.get("events", []) or []) if data else [])
     today = datetime.now(timezone.utc).strftime("%Y%m%d")
@@ -311,9 +342,10 @@ def fetch_teams():
     return out
 
 
-def fetch_team_schedule(team_id, season="2026"):
+def fetch_team_schedule(team_id, season=None):
     """Played NBA games for a team (form source). Team IDs are global in ESPN."""
-    data = _get(f"{BASE}/teams/{team_id}/schedule", params={"season": season})
+    data = _get(f"{BASE}/teams/{team_id}/schedule",
+                params={"season": season or current_season()})
     if not data:
         return []
     out = []
@@ -324,8 +356,9 @@ def fetch_team_schedule(team_id, season="2026"):
     return out
 
 
-def fetch_schedules(season="2026"):
+def fetch_schedules(season=None):
     """All NBA games in a season (aggregated per-team schedules, deduped)."""
+    season = season or current_season()
     teams = fetch_teams()
     seen, out = set(), []
     for t in teams:

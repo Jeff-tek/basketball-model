@@ -60,8 +60,8 @@ def test_missing_odds_note_never_says_no_bet():
 
 def test_model_only_tip_structure():
     tip = _model_only_tip("Lakers", "Celtics", {})
-    assert set(tip) == {"probs", "pick", "verdict", "confidence",
-                        "reasons", "models", "tags"}
+    assert set(tip) == {"probs", "fair", "edge", "pick", "verdict",
+                        "confidence", "reasons", "models", "tags"}
     assert set(tip["probs"]) == {"ml", "spread", "totals"}
     assert set(tip["probs"]["ml"]) == {"home", "away"}
     assert set(tip["probs"]["spread"]) == {"home", "away"}
@@ -225,6 +225,120 @@ def test_tips_skips_non_today():
     assert ("Lakers", "Celtics") not in names, "post-state should be filtered"
     assert ("Warriors", "Heat") in names, "pre-match with old date should be kept"
     assert ("Nuggets", "Mavericks") in names, "no state defaults to pre"
+
+
+def test_fetch_events_nba_calls_zero_arg_scoreboard():
+    """Regression: espn_free.fetch_scoreboard() takes no league arg.
+
+    The board was empty in production because server passed espn_key, the
+    TypeError was swallowed by the defensive except, and /tips rendered
+    'No tips' on a full matchday.
+    """
+    from server import main
+    from ingest import espn_free
+    orig = espn_free.fetch_scoreboard
+    main._cache.clear()
+    espn_free.fetch_scoreboard = lambda: [{"home": "Lakers", "away": "Celtics"}]
+    try:
+        events = main._fetch_events("NBA", "nba")
+    finally:
+        espn_free.fetch_scoreboard = orig
+        main._cache.clear()
+    assert events == [{"home": "Lakers", "away": "Celtics"}]
+
+
+def test_fetch_events_euroleague_uses_euroleague_free():
+    """EuroLeague must read euroleague_free — ingest.euroleague_api never existed."""
+    from server import main
+    from ingest import euroleague_free
+    orig = euroleague_free.fetch_scoreboard
+    main._cache.clear()
+    euroleague_free.fetch_scoreboard = lambda: [
+        {"home": "Real Madrid", "away": "Barcelona"}]
+    try:
+        events = main._fetch_events("EuroLeague", "euroleague")
+    finally:
+        euroleague_free.fetch_scoreboard = orig
+        main._cache.clear()
+    assert events and events[0]["home"] == "Real Madrid"
+
+
+def test_team_form_ignores_other_teams_games():
+    """A full-league fixture list must only count the team's own games."""
+    from server import main
+    sched = [
+        {"home": "A", "away": "B", "home_score": 100, "away_score": 90,
+         "played": True, "date": "2026-10-01"},
+        {"home": "C", "away": "D", "home_score": 50, "away_score": 50,
+         "played": True, "date": "2026-10-02"},
+        {"home": "B", "away": "A", "home_score": 80, "away_score": 110,
+         "played": True, "date": "2026-10-03"},
+    ]
+    form = main._team_form(sched, sched, "A", "B")
+    assert form["home_points_for"] == 105.0
+    assert form["away_points_for"] == 85.0
+
+
+def test_team_form_last_five_in_date_order():
+    """Schedule rows arrive unsorted; form must use the five most recent."""
+    from server import main
+    sched = [
+        {"home": "A", "away": "B", "home_score": s, "away_score": 100,
+         "played": True, "date": f"2026-10-{d:02d}"}
+        for d, s in ((9, 120), (1, 90), (7, 130), (3, 95), (5, 101),
+                     (2, 91), (8, 125))
+    ]
+    form = main._team_form(sched, sched[::-1], "A", "B")
+    # last five dates: 3,5,7,8,9 → 95,101,130,125,120
+    assert form["home_points_for"] == (95 + 101 + 130 + 125 + 120) / 5
+
+
+def test_market_from_odds_no_default_lines():
+    """Missing lines stay None so the engine skips those markets."""
+    from server import main
+    market = main._market_from_odds({"ml_home": 1.9, "ml_away": 1.9})
+    assert market["spread"] is None
+    assert market["total"] is None
+    assert market["home_ml"] == 1.9
+
+
+def test_fallback_odds_maps_odds_api_shape():
+    """EuroLeague has no odds in its own feed; Odds API fills the book legs."""
+    from server import main
+    from ingest import odds_free
+    orig = odds_free.fetch_scoreboard
+    main._cache.clear()
+    odds_free.fetch_scoreboard = lambda sport="nba": [{
+        "home": "Real Madrid", "away": "Barcelona",
+        "odds": {"provider": "pinnacle", "home": 1.8, "away": 2.0,
+                 "spread": -3.5, "spread_odds": 1.91,
+                 "total": 165.5, "total_odds": 1.95},
+    }]
+    try:
+        o = main._fallback_odds("EuroLeague", "Real Madrid", "Barcelona")
+    finally:
+        odds_free.fetch_scoreboard = orig
+        main._cache.clear()
+    assert o["ml_home"] == 1.8 and o["ml_away"] == 2.0
+    assert o["spread"] == -3.5 and o["spread_price"] == 1.91
+    assert o["total"] == 165.5 and o["over_price"] == 1.95
+
+
+def test_fallback_odds_unknown_fixture_returns_empty():
+    from server import main
+    from ingest import odds_free
+    orig = odds_free.fetch_scoreboard
+    main._cache.clear()
+    odds_free.fetch_scoreboard = lambda sport="nba": [{
+        "home": "Real Madrid", "away": "Barcelona",
+        "odds": {"home": 1.8, "away": 2.0},
+    }]
+    try:
+        assert main._fallback_odds("EuroLeague", "Zalgiris Kaunas",
+                                   "Beşiktaş Istanbul") == {}
+    finally:
+        odds_free.fetch_scoreboard = orig
+        main._cache.clear()
 
 
 if __name__ == "__main__":

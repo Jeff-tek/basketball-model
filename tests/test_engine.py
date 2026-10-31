@@ -293,6 +293,28 @@ class TestBuildTip(unittest.TestCase):
         tip = build_tip(ratings=self.RATINGS, market=self.MARKET)
         self.assertGreater(len(tip["reasons"]), 0)
 
+    def test_no_total_line_skips_totals_market(self):
+        """No quoted total → no Over/Under pick (a default line invents one)."""
+        tip = build_tip(ratings=self.RATINGS, market={"spread": -5.5})
+        self.assertNotIn("Over", tip["slate"])
+        self.assertNotIn("Under", tip["slate"])
+        self.assertEqual(len(tip["slate"]), 4)
+        self.assertIsNone(tip["probs"]["total"]["over"])
+        self.assertIsNone(tip["fair_odds"]["total"]["over"])
+        self.assertTrue(any("No total line" in r for r in tip["reasons"]))
+
+    def test_no_spread_line_skips_spread_market(self):
+        tip = build_tip(ratings=self.RATINGS, market={"total": 165.0})
+        self.assertNotIn("Home -5.5", tip["slate"])
+        self.assertIsNone(tip["probs"]["spread"]["home_cover"])
+        self.assertEqual(len(tip["slate"]), 4)
+
+    def test_ml_only_market_still_picks(self):
+        """EuroLeague with no book odds: ML-only tip from ratings, no fake lines."""
+        tip = build_tip(ratings=self.RATINGS, market={})
+        self.assertEqual(set(tip["slate"]), {"Home ML", "Away ML"})
+        self.assertIn(tip["pick"], ("Home ML", "Away ML"))
+
     def test_strong_favorite_gets_bet(self):
         """Overwhelming favorite → pick prob >= 0.70 → BET."""
         tip = build_tip(

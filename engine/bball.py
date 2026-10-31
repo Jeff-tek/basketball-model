@@ -176,8 +176,8 @@ def build_tip(
     hca = ratings.get("home_court", HOME_COURT_NBA)
     sigma = ratings.get("sigma", DEFAULT_SIGMA)
 
-    spread = market.get("spread", 0.0)
-    total_line = market.get("total", 220.0)
+    spread = market.get("spread")
+    total_line = market.get("total")
 
     # Expected margin and total from ratings
     mu = expected_margin(h_off, h_def, a_off, a_def, hca)
@@ -201,19 +201,25 @@ def build_tip(
     ens_ml = {k: sum(votes[n][k] * weights[n] for n in votes) / total_w
               for k in ("home", "away")}
 
-    # Spread and total from Normal model
-    sp = prob_spread(mu, spread, sigma)
-    tp = prob_total(mu_tot, total_line, sigma)
+    # Spread and total from Normal model — only for markets we have a line for.
+    # A default line would invent a market: EuroLeague totals sit near 165, so
+    # scoring against a hardcoded 220 made every pick a "100% Under".
+    sp = (prob_spread(mu, spread, sigma) if spread is not None
+          else {"home_cover": None, "away_cover": None})
+    tp = (prob_total(mu_tot, total_line, sigma) if total_line is not None
+          else {"over": None, "under": None})
 
     # Safest-pick slate — mirrors football but with basketball markets
     slate = {
         "Home ML": ens_ml["home"],
         "Away ML": ens_ml["away"],
-        f"Home {spread:+.1f}": sp["home_cover"],
-        f"Away {-spread:+.1f}": sp["away_cover"],
-        "Over": tp["over"],
-        "Under": tp["under"],
     }
+    if spread is not None:
+        slate[f"Home {spread:+.1f}"] = sp["home_cover"]
+        slate[f"Away {-spread:+.1f}"] = sp["away_cover"]
+    if total_line is not None:
+        slate["Over"] = tp["over"]
+        slate["Under"] = tp["under"]
     pick = max(slate, key=lambda k: slate[k])
     prob = slate[pick]
 
@@ -254,10 +260,10 @@ def build_tip(
 
     # Fair odds
     fair_ml = {k: round(fair(v), 2) for k, v in ens_ml.items()}
-    fair_spread = {"home_cover": round(fair(sp["home_cover"]), 2),
-                   "away_cover": round(fair(sp["away_cover"]), 2)}
-    fair_total = {"over": round(fair(tp["over"]), 2),
-                  "under": round(fair(tp["under"]), 2)}
+    fair_spread = ({k: round(fair(v), 2) for k, v in sp.items()} if spread is not None
+                   else {"home_cover": None, "away_cover": None})
+    fair_total = ({k: round(fair(v), 2) for k, v in tp.items()} if total_line is not None
+                  else {"over": None, "under": None})
 
     # Kelly on best ML edge (display only)
     best_odds = ml_odds.get(best_key) if best_key else None
@@ -270,10 +276,16 @@ def build_tip(
     for name, v in votes.items():
         reasons.append(f"{name.capitalize()} ML: {v['home']:.2%} / {v['away']:.2%}")
     reasons.append(f"Ensembled ML: {ens_ml['home']:.2%} / {ens_ml['away']:.2%}")
-    reasons.append(f"Spread {spread:+.1f}: cover {sp['home_cover']:.2%} / "
-                   f"{sp['away_cover']:.2%}")
-    reasons.append(f"Total {total_line:.1f}: over {tp['over']:.2%} / "
-                   f"{tp['under']:.2%}")
+    if spread is not None:
+        reasons.append(f"Spread {spread:+.1f}: cover {sp['home_cover']:.2%} / "
+                       f"{sp['away_cover']:.2%}")
+    else:
+        reasons.append("No spread line — spread market skipped")
+    if total_line is not None:
+        reasons.append(f"Total {total_line:.1f}: over {tp['over']:.2%} / "
+                       f"{tp['under']:.2%}")
+    else:
+        reasons.append("No total line — totals market skipped")
     reasons.append(f"Safest: {pick} ({prob:.1%}) across {len(slate)} markets")
     reasons.append(
         f"Models {'agree' if agree else 'split'} (ML spread {gap:.2f})"
@@ -287,8 +299,10 @@ def build_tip(
         "pick": pick,
         "probs": {
             "ML": {k: round(v, 4) for k, v in ens_ml.items()},
-            "spread": {k: round(v, 4) for k, v in sp.items()},
-            "total": {k: round(v, 4) for k, v in tp.items()},
+            "spread": {k: (round(v, 4) if v is not None else None)
+                       for k, v in sp.items()},
+            "total": {k: (round(v, 4) if v is not None else None)
+                      for k, v in tp.items()},
         },
         "slate": {k: round(v, 4) for k, v in slate.items()},
         "fair_odds": {"ML": fair_ml, "spread": fair_spread, "total": fair_total},
