@@ -1,0 +1,31 @@
+name: diag
+
+# Live end-to-end diagnostic of the tips pipeline + the full test suite.
+# Everything runs here (not on a dev device) so no local install/build is needed.
+on:
+  workflow_dispatch: {}
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  diag:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install deps
+        run: pip install -r requirements.txt
+
+      - name: Unit tests (engine + ingest + server)
+        run: |
+          python -m unittest tests.test_engine -v
+          python tests/test_ingest.py
+          python tests/test_server.py
+
+      - name: Live pipeline diagnostic
+        run: python tools/diagnose.py
